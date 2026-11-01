@@ -2,6 +2,8 @@
 import { execSync } from "node:child_process";
 import fs from "node:fs";
 import path from "node:path";
+import process from "node:process";
+import console from "node:console";
 
 const { version } = JSON.parse(fs.readFileSync("package.json", "utf8"));
 const name = `language-manager-${process.argv[2] ?? `v${version}`}-${process.platform}-${process.arch}`;
