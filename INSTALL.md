@@ -23,7 +23,7 @@ Extract the archive, open a terminal in the folder, and create your settings:
 cp .env.example .env
 ```
 
-On Windows use `copy .env.example .env`. Fill in `.env`; every setting is described there.
+On Windows use `copy .env.example .env`. Fill in `.env`; every setting is described there. The bundle always runs in production mode, so `REDIS_URL` and `VERIFICATION_PROVIDER=twilio` with your Twilio settings are required, or the server stops at startup.
 
 Create the database tables and language list. Run these again after each upgrade:
 

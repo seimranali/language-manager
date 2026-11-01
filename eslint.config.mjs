@@ -2,7 +2,7 @@ import js from "@eslint/js";
 import tseslint from "typescript-eslint";
 
 export default tseslint.config(
-  { ignores: [".next/", "dist/", "node_modules/", "tests/load/", "scripts/dev-db.mjs", "next-env.d.ts"] },
+  { ignores: [".next/", "dist/", "release/", "node_modules/", "tests/load/", "scripts/dev-db.mjs", "next-env.d.ts"] },
   js.configs.recommended,
   ...tseslint.configs.recommended,
   {
