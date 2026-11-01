@@ -23,6 +23,18 @@ execSync("npx --yes prisma@6.19.3 generate", { cwd: out, stdio: "inherit" });
 fs.cpSync(".next/standalone", out, { recursive: true, filter: (source) => !/[\\/]\.env/.test(source) });
 fs.cpSync(".next/static", path.join(out, ".next/static"), { recursive: true });
 
-const archive = process.platform === "win32" ? `${name}.zip` : `${name}.tar.gz`;
+// Next links its hashed aliases by absolute build path, which would not exist on the installed machine.
+const aliases = path.join(out, ".next/node_modules");
+for (const entry of fs.existsSync(aliases) ? fs.readdirSync(aliases, { recursive: true }) : []) {
+  const link = path.join(aliases, entry);
+  if (!fs.lstatSync(link).isSymbolicLink()) continue;
+  const relative = fs.readlinkSync(link).replace(/\\/g, "/").split("/.next/standalone/")[1];
+  if (!relative) continue;
+  const target = path.join(out, relative);
+  fs.rmSync(link, { recursive: true });
+  fs.symlinkSync(path.relative(path.dirname(link), target), link, "junction");
+}
+
+const archive =process.platform === "win32" ? `${name}.zip` : `${name}.tar.gz`;
 execSync(process.platform === "win32" ? `tar -a -cf ${archive} ${name}` : `tar -czf ${archive} ${name}`, { cwd: "release", stdio: "inherit" });
 console.log(path.join("release", archive));

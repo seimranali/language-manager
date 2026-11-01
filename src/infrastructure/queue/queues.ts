@@ -33,7 +33,8 @@ export class BullJobQueue implements JobQueue {
 
   async addTelegramUpdate(updateId: string, update: unknown) {
     await this.telegram.add("update", update, {
-      jobId: updateId,
+      // BullMQ rejects numeric job ids, and Telegram update ids are numbers.
+      jobId: `update-${updateId}`,
       attempts: 3,
       backoff: { type: "exponential", delay: 1_000, jitter: 0.5 },
       removeOnComplete: { count: 1_000 },
