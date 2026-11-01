@@ -1,0 +1,54 @@
+# Local and single-host stack. Provide values through a .env file.
+services:
+  postgres:
+    image: postgres:18
+    environment:
+      POSTGRES_DB: language_manager
+      POSTGRES_USER: ${POSTGRES_USER:?set POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD}
+      POSTGRES_INITDB_ARGS: --encoding=UTF8
+    volumes: [pgdata:/var/lib/postgresql]
+    healthcheck:
+      test: [CMD-SHELL, pg_isready -U $$POSTGRES_USER -d language_manager]
+      interval: 5s
+      retries: 10
+  redis:
+    image: redis:8-alpine
+    # noeviction: BullMQ data must never be evicted.
+    command: [redis-server, --appendonly, "yes", --maxmemory-policy, noeviction]
+    volumes: [redisdata:/data]
+    healthcheck:
+      test: [CMD, redis-cli, ping]
+      interval: 5s
+      retries: 10
+  migrate:
+    build: { context: ., target: builder }
+    command: npx prisma migrate deploy
+    env_file: .env
+    environment: &internal
+      DATABASE_URL: postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/language_manager?connection_limit=20
+      REDIS_URL: redis://redis:6379
+    depends_on:
+      postgres: { condition: service_healthy }
+  api:
+    build: { context: ., target: web }
+    image: ${API_IMAGE:-language-manager-api:local}
+    init: true
+    env_file: .env
+    environment: *internal
+    ports: ["${PORT:-3000}:3000"]
+    depends_on:
+      migrate: { condition: service_completed_successfully }
+      redis: { condition: service_healthy }
+  worker:
+    build: { context: ., target: worker }
+    image: ${WORKER_IMAGE:-language-manager-worker:local}
+    init: true
+    env_file: .env
+    environment: *internal
+    depends_on:
+      migrate: { condition: service_completed_successfully }
+      redis: { condition: service_healthy }
+volumes:
+  pgdata:
+  redisdata:

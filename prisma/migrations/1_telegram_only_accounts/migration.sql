@@ -1,0 +1,2 @@
+ALTER TABLE "users" ALTER COLUMN "mobile" DROP NOT NULL;
+ALTER TABLE "users" ALTER COLUMN "passwordHash" DROP NOT NULL;

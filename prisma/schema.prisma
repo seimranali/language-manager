@@ -1,0 +1,275 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum Role {
+  USER
+  ADMIN
+}
+
+enum TranslationStatus {
+  COMPLETED
+  PARTIAL
+  FAILED
+}
+
+enum JobStatus {
+  QUEUED
+  RUNNING
+  COMPLETED
+  FAILED
+  CANCELLED
+}
+
+enum TelegramUpdateStatus {
+  RECEIVED
+  PROCESSED
+  FAILED
+}
+
+model User {
+  id                 String    @id @default(uuid()) @db.Uuid
+  firstName          String    @db.VarChar(100)
+  lastName           String    @db.VarChar(100)
+  gender             String    @db.VarChar(32)
+  nativeLanguageCode String    @db.VarChar(16)
+  // Null for Telegram-only accounts, which sign in through the linked identity.
+  mobile             String?   @unique @db.VarChar(20)
+  passwordHash       String?
+  role               Role      @default(USER)
+  isActive           Boolean   @default(true)
+  isVerified         Boolean   @default(false)
+  mobileVerifiedAt   DateTime?
+  createdAt          DateTime  @default(now())
+  updatedAt          DateTime  @updatedAt
+  lastLoginAt        DateTime?
+
+  nativeLanguage     Language             @relation(fields: [nativeLanguageCode], references: [code])
+  externalIdentities ExternalIdentity[]
+  sessions           Session[]
+  refreshTokens      RefreshToken[]
+  history            TranslationHistory[]
+  preferences        UserPreference?
+  jobs               TranslationJob[]
+  usage              ProviderUsage[]
+  auditLogs          AuditLog[]
+
+  @@map("users")
+}
+
+model MobileVerification {
+  id        String    @id @default(uuid()) @db.Uuid
+  mobile    String    @db.VarChar(20)
+  codeHash  String
+  attempts  Int       @default(0)
+  expiresAt DateTime
+  usedAt    DateTime?
+  createdAt DateTime  @default(now())
+
+  @@index([mobile, createdAt])
+  @@map("mobile_verifications")
+}
+
+model ExternalIdentity {
+  id             String   @id @default(uuid()) @db.Uuid
+  userId         String   @db.Uuid
+  provider       String   @db.VarChar(32)
+  externalUserId String   @db.VarChar(64)
+  linkedAt       DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, externalUserId])
+  @@unique([provider, userId])
+  @@map("external_identities")
+}
+
+// One row per login; its id is the refresh-token family id.
+model Session {
+  id         String    @id @default(uuid()) @db.Uuid
+  userId     String    @db.Uuid
+  deviceName String?   @db.VarChar(120)
+  userAgent  String?   @db.VarChar(255)
+  createdAt  DateTime  @default(now())
+  lastUsedAt DateTime  @default(now())
+  expiresAt  DateTime
+  revokedAt  DateTime?
+
+  user   User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  tokens RefreshToken[]
+
+  @@index([userId, revokedAt])
+  @@map("sessions")
+}
+
+model RefreshToken {
+  id                String    @id @default(uuid()) @db.Uuid
+  userId            String    @db.Uuid
+  tokenHash         String    @unique @db.Char(64)
+  tokenFamilyId     String    @db.Uuid
+  createdAt         DateTime  @default(now())
+  expiresAt         DateTime
+  revokedAt         DateTime?
+  replacedByTokenId String?   @db.Uuid
+
+  user    User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  session Session @relation(fields: [tokenFamilyId], references: [id], onDelete: Cascade)
+
+  @@index([tokenFamilyId])
+  @@index([expiresAt])
+  @@map("refresh_tokens")
+}
+
+model Language {
+  id         String   @id @default(uuid()) @db.Uuid
+  code       String   @unique @db.VarChar(16)
+  name       String   @db.VarChar(100)
+  nativeName String   @db.VarChar(100)
+  isActive   Boolean  @default(true)
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  users User[]
+
+  @@index([isActive, name])
+  @@map("languages")
+}
+
+// One request. Each target language is a TranslationResult row, which lets a
+// multilingual request keep its three translations in normal form.
+model TranslationHistory {
+  id                   String            @id @default(uuid()) @db.Uuid
+  userId               String            @db.Uuid
+  sourceLanguage       String            @db.VarChar(16)
+  provider             String            @db.VarChar(32)
+  originalText         String
+  createdAt            DateTime          @default(now())
+  processingDurationMs Int
+  status               TranslationStatus
+
+  user    User                @relation(fields: [userId], references: [id], onDelete: Cascade)
+  results TranslationResult[]
+
+  @@index([userId, createdAt(sort: Desc)])
+  @@index([createdAt])
+  @@map("translation_history")
+}
+
+model TranslationResult {
+  id             String  @id @default(uuid()) @db.Uuid
+  historyId      String  @db.Uuid
+  targetLanguage String  @db.VarChar(16)
+  provider       String? @db.VarChar(32)
+  translatedText String?
+  errorCode      String? @db.VarChar(64)
+
+  history TranslationHistory @relation(fields: [historyId], references: [id], onDelete: Cascade)
+
+  @@unique([historyId, targetLanguage])
+  @@map("translation_results")
+}
+
+model UserPreference {
+  id                      String   @id @default(uuid()) @db.Uuid
+  userId                  String   @unique @db.Uuid
+  preferredTargetLanguage String?  @db.VarChar(16)
+  preferredProvider       String   @default("google") @db.VarChar(16)
+  translationStyle        String   @default("natural") @db.VarChar(32)
+  saveHistory             Boolean  @default(true)
+  createdAt               DateTime @default(now())
+  updatedAt               DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("user_preferences")
+}
+
+model TranslationJob {
+  id             String    @id @default(uuid()) @db.Uuid
+  userId         String    @db.Uuid
+  idempotencyKey String?   @db.VarChar(128)
+  status         JobStatus @default(QUEUED)
+  request        Json
+  result         Json?
+  errorCode      String?   @db.VarChar(64)
+  attempts       Int       @default(0)
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+  completedAt    DateTime?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, idempotencyKey])
+  @@index([status, createdAt])
+  @@map("translation_jobs")
+}
+
+model ProviderUsage {
+  id               String   @id @default(uuid()) @db.Uuid
+  userId           String?  @db.Uuid
+  provider         String   @db.VarChar(32)
+  model            String?  @db.VarChar(64)
+  characters       Int
+  inputTokens      Int?
+  outputTokens     Int?
+  estimatedCostUsd Decimal? @db.Decimal(12, 6)
+  createdAt        DateTime @default(now())
+
+  user User? @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  @@index([userId, createdAt])
+  @@map("provider_usage")
+}
+
+model TelegramUpdate {
+  updateId   BigInt               @id
+  status     TelegramUpdateStatus @default(RECEIVED)
+  receivedAt DateTime             @default(now())
+
+  @@index([receivedAt])
+  @@map("telegram_updates")
+}
+
+// Single-use account-linking link sent to a Telegram chat. `draft` holds the
+// non-secret answers from the guided chat registration.
+model TelegramLinkToken {
+  id             String    @id @default(uuid()) @db.Uuid
+  tokenHash      String    @unique @db.Char(64)
+  telegramUserId String    @db.VarChar(64)
+  chatId         String    @db.VarChar(64)
+  draft          Json?
+  expiresAt      DateTime
+  consumedAt     DateTime?
+  createdAt      DateTime  @default(now())
+
+  @@index([expiresAt])
+  @@map("telegram_link_tokens")
+}
+
+model TelegramConversation {
+  telegramUserId String   @id @db.VarChar(64)
+  step           String   @db.VarChar(32)
+  data           Json
+  expiresAt      DateTime
+
+  @@map("telegram_conversations")
+}
+
+model AuditLog {
+  id        String   @id @default(uuid()) @db.Uuid
+  userId    String?  @db.Uuid
+  action    String   @db.VarChar(64)
+  timestamp DateTime @default(now())
+  requestId String?  @db.VarChar(64)
+  metadata  Json?
+
+  user User? @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  @@index([userId, timestamp])
+  @@map("audit_logs")
+}

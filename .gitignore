@@ -1,0 +1,15 @@
+node_modules/
+.next/
+dist/
+coverage/
+.env
+.env.*
+!.env.example
+*.pem
+*service-account*.json
+.test-pg/
+.test-pg-smoke/
+next-env.d.ts
+*.tsbuildinfo
+.dev-pg/
+release/
