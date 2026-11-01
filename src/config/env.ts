@@ -69,6 +69,9 @@ const schema = z
     TELEGRAM_WEBHOOK_SECRET: z.string().min(16).optional(),
     TELEGRAM_WEBHOOK_URL: z.url().optional(),
     TELEGRAM_PRONUNCIATION: bool(true),
+    /** Target codes that use a guidance-aware provider unless the request names one. */
+    GUIDED_TARGETS: z.string().default("nl,ar-SA").transform((v) => v.split(",").map((c) => c.trim()).filter(Boolean)),
+    ROMAN_URDU_ENABLED: bool(true),
     TELEGRAM_LINK_TTL: z.coerce.number().int().positive().default(900),
 
     RATE_LIMIT_WINDOW_SECONDS: z.coerce.number().int().positive().default(60),

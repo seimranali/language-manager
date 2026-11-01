@@ -189,7 +189,7 @@ export class TranslationService {
 
   /** Google cannot read Urdu in Latin letters, so it gets Urdu script. On failure the text is translated as written. */
   private async readRomanUrdu(userId: string, text: string, source?: string): Promise<string | null> {
-    if ((source && source !== URDU) || !LATIN_LETTERS.test(text) || ARABIC_SCRIPT.test(text)) return null;
+    if (!getEnv().ROMAN_URDU_ENABLED || (source && source !== URDU) || !LATIN_LETTERS.test(text) || ARABIC_SCRIPT.test(text)) return null;
     const user = await this.users.findById(userId);
     if (user?.nativeLanguageCode !== URDU) return null;
     try {
@@ -239,7 +239,7 @@ export class TranslationService {
     let failure: unknown;
     let supported = false;
     // Only Claude can follow writing guidance, so these targets leave the default provider. An explicit request provider still wins.
-    const routed = target.guidance && !resolved.common.provider ? { ...resolved, mode: "auto" as const } : resolved;
+    const routed = target.guidance && !resolved.common.provider && getEnv().GUIDED_TARGETS.includes(target.code) ? { ...resolved, mode: "auto" as const } : resolved;
     const candidates = this.candidates(routed, target.guidance);
     for (const [index, provider] of candidates.entries()) {
       if (!(await provider.supports(source, target.code))) continue;
