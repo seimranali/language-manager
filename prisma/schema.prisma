@@ -40,6 +40,8 @@ model User {
   nativeLanguageCode String    @db.VarChar(16)
   // Null for Telegram-only accounts, which sign in through the linked identity.
   mobile             String?   @unique @db.VarChar(20)
+  email              String?   @unique @db.VarChar(254)
+  emailVerifiedAt    DateTime?
   passwordHash       String?
   role               Role      @default(USER)
   isActive           Boolean   @default(true)
@@ -60,6 +62,19 @@ model User {
   auditLogs          AuditLog[]
 
   @@map("users")
+}
+
+model EmailVerification {
+  id        String    @id @default(uuid()) @db.Uuid
+  email     String    @db.VarChar(254)
+  codeHash  String
+  attempts  Int       @default(0)
+  expiresAt DateTime
+  usedAt    DateTime?
+  createdAt DateTime  @default(now())
+
+  @@index([email, createdAt])
+  @@map("email_verifications")
 }
 
 model MobileVerification {

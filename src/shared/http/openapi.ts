@@ -6,6 +6,8 @@ const OPERATIONS: Op[] = [
   ["get", "/metrics", "Prometheus metrics (bearer METRICS_TOKEN)"],
   ["get", "/openapi.json", "This document"],
   ["post", "/auth/register", "Register a user", { body: "Register", success: 201 }],
+  ["post", "/auth/verify-email/request", "Send an email verification code", { body: "EmailOnly", success: 202 }],
+  ["post", "/auth/verify-email/confirm", "Confirm an email verification code", { body: "VerifyEmailConfirm" }],
   ["post", "/auth/verify-mobile/request", "Send a mobile verification code", { body: "MobileOnly", success: 202 }],
   ["post", "/auth/verify-mobile/confirm", "Confirm a verification code", { body: "VerifyConfirm" }],
   ["post", "/auth/login", "Log in", { body: "Login" }],
@@ -49,10 +51,12 @@ const translation = {
 const object = (properties: Record<string, unknown>, required: string[] = []) => ({ type: "object", properties, required, additionalProperties: false });
 
 const SCHEMAS = {
-  Register: object({ firstName: str, lastName: str, gender: str, nativeLanguage: str, mobile: str, password: str }, ["firstName", "lastName", "gender", "nativeLanguage", "mobile", "password"]),
+  Register: object({ firstName: str, lastName: str, gender: str, nativeLanguage: str, email: str, mobile: str, password: str }, ["firstName", "lastName", "gender", "nativeLanguage", "password"]),
+  EmailOnly: object({ email: str }, ["email"]),
+  VerifyEmailConfirm: object({ email: str, code: str }, ["email", "code"]),
   MobileOnly: object({ mobile: str }, ["mobile"]),
   VerifyConfirm: object({ mobile: str, code: str }, ["mobile", "code"]),
-  Login: object({ mobile: str, password: str, deviceName: str }, ["mobile", "password"]),
+  Login: object({ email: str, mobile: str, password: str, deviceName: str }, ["password"]),
   Refresh: object({ refreshToken: str }, ["refreshToken"]),
   ProfileUpdate: object({ firstName: str, lastName: str, gender: str, nativeLanguage: str }),
   PasswordConfirm: object({ password: str }, ["password"]),

@@ -37,6 +37,12 @@ const schema = z
     REQUIRE_VERIFIED_MOBILE: bool(true),
     VERIFICATION_PROVIDER: z.enum(["console", "twilio"]).default("console"),
     VERIFICATION_CODE_TTL: z.coerce.number().int().positive().default(600),
+    SMTP_HOST: z.string().optional(),
+    SMTP_PORT: z.coerce.number().int().positive().default(587),
+    SMTP_TLS: z.enum(["starttls", "tls", "none"]).default("starttls"),
+    SMTP_USERNAME: z.string().optional(),
+    SMTP_PASSWORD: z.string().optional(),
+    SMTP_FROM: z.string().optional(),
     TWILIO_ACCOUNT_SID: z.string().optional(),
     TWILIO_AUTH_TOKEN: z.string().optional(),
     TWILIO_FROM_NUMBER: z.string().optional(),
@@ -105,6 +111,10 @@ const schema = z
       if (env.VERIFICATION_PROVIDER === "console") {
         ctx.addIssue({ code: "custom", path: ["VERIFICATION_PROVIDER"], message: "console delivery is not allowed in production" });
       }
+    }
+    if (env.NODE_ENV === "production" || env.SMTP_HOST) {
+      require("SMTP_HOST", "for email verification");
+      require("SMTP_FROM", "for email verification");
     }
     if (env.VERIFICATION_PROVIDER === "twilio") {
       require("TWILIO_ACCOUNT_SID", "for twilio verification");

@@ -12,6 +12,7 @@ import type { AuditService } from "@/modules/audit/audit.service";
 import type { LanguageService } from "@/modules/languages/language.service";
 import { toPublicUser, type UserService } from "@/modules/users/user.service";
 import type { RegisterInput } from "@/modules/users/user.validation";
+import type { EmailVerificationService } from "./email-verification.service";
 import type { VerificationService } from "./verification.service";
 
 export interface AuthContext {
@@ -26,7 +27,7 @@ export interface ClientInfo {
   requestId?: string;
 }
 
-const badCredentials = () => new AppError("INVALID_CREDENTIALS", "The mobile number or password is incorrect.");
+const badCredentials = () => new AppError("INVALID_CREDENTIALS", "The email, mobile number or password is incorrect.");
 const invalidToken = () => new AppError("TOKEN_INVALID", "The refresh token is invalid or expired.");
 
 export class AuthService {
@@ -38,6 +39,7 @@ export class AuthService {
     private readonly languages: LanguageService,
     private readonly verification: VerificationService,
     private readonly audit: AuditService,
+    private readonly emailVerification: EmailVerificationService,
   ) {}
 
   async register(input: RegisterInput, requestId?: string) {
@@ -50,12 +52,15 @@ export class AuthService {
       gender: input.gender,
       nativeLanguageCode: input.nativeLanguage,
       mobile: input.mobile,
+      email: input.email,
       passwordHash,
     });
+    if (!user && input.email) throw new AppError("EMAIL_ALREADY_REGISTERED", "This email address is already registered.");
     if (!user) throw new AppError("MOBILE_ALREADY_REGISTERED", "This mobile number is already registered.");
     await this.audit.record("user.registered", user.id, requestId);
-    await this.verification.request(input.mobile);
-    return { user: toPublicUser(user), verification: { status: "pending", channel: "sms" } };
+    if (input.email) await this.emailVerification.request(input.email);
+    else await this.verification.request(input.mobile!);
+    return { user: toPublicUser(user), verification: { status: "pending", channel: input.email ? "email" : "sms" } };
   }
 
   /** Checks credentials without creating a session; shared with account linking. */
@@ -72,10 +77,21 @@ export class AuthService {
     return user;
   }
 
-  async login(mobile: string, password: string, client: ClientInfo) {
+  private async verifyEmailCredentials(email: string, password: string) {
+    const user = await this.users.findByEmail(email);
+    if (!user) {
+      await burnPasswordCheck(password);
+      throw badCredentials();
+    }
+    if (!(await verifyPassword(user.passwordHash ?? "", password)) || !user.isActive) throw badCredentials();
+    if (!user.emailVerifiedAt) throw new AppError("EMAIL_NOT_VERIFIED", "Verify your email address before signing in.");
+    return user;
+  }
+
+  async login(identity: { email?: string; mobile?: string }, password: string, client: ClientInfo) {
     let user;
     try {
-      user = await this.verifyCredentials(mobile, password);
+      user = identity.email ? await this.verifyEmailCredentials(identity.email, password) : await this.verifyCredentials(identity.mobile!, password);
     } catch (error) {
       await this.audit.record("auth.login_failed", undefined, client.requestId);
       throw error;

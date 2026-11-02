@@ -6,8 +6,8 @@ export const POST = route(
   { body: loginSchema, rateLimit: { scope: "login", max: 30 } },
   async ({ body, container, requestId, req }) => {
     const env = getEnv();
-    await container.rateLimiter.consume(`login:mobile:${body.mobile}`, env.LOGIN_RATE_LIMIT_MAX, env.RATE_LIMIT_WINDOW_SECONDS);
-    return container.authService.login(body.mobile, body.password, {
+    await container.rateLimiter.consume(`login:${body.email ? `email:${body.email}` : `mobile:${body.mobile}`}`, env.LOGIN_RATE_LIMIT_MAX, env.RATE_LIMIT_WINDOW_SECONDS);
+    return container.authService.login({ email: body.email, mobile: body.mobile }, body.password, {
       deviceName: body.deviceName,
       userAgent: req.headers.get("user-agent") ?? undefined,
       requestId,

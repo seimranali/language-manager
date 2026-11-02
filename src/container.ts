@@ -4,10 +4,12 @@ import { createRedis, MemoryStore, RedisStore, type KeyValueStore } from "@/infr
 import { getPrisma } from "@/infrastructure/database/prisma";
 import { logger } from "@/infrastructure/logging/logger";
 import { BullJobQueue, type JobQueue } from "@/infrastructure/queue/queues";
+import { ConsoleEmailSender, SmtpEmailSender, type EmailSender } from "@/infrastructure/email/email-sender";
 import { ConsoleSmsSender, TwilioSmsSender, type SmsSender } from "@/infrastructure/sms/sms-sender";
 import { HttpTelegramClient, type TelegramClient } from "@/infrastructure/telegram/telegram-client";
 import { AuditService } from "@/modules/audit/audit.service";
 import { AuthService } from "@/modules/auth/auth.service";
+import { EmailVerificationService } from "@/modules/auth/email-verification.service";
 import { VerificationService } from "@/modules/auth/verification.service";
 import { LanguageService } from "@/modules/languages/language.service";
 import { MaintenanceService } from "@/modules/maintenance/maintenance.service";
@@ -37,6 +39,7 @@ import { TranslationHistoryRepository } from "@/repositories/translation-history
 import { TranslationJobRepository } from "@/repositories/translation-job.repository";
 import { UserPreferenceRepository } from "@/repositories/user-preference.repository";
 import { UserRepository } from "@/repositories/user.repository";
+import { EmailVerificationRepository } from "@/repositories/email-verification.repository";
 import { VerificationRepository } from "@/repositories/verification.repository";
 
 export interface Overrides {
@@ -44,6 +47,7 @@ export interface Overrides {
   store?: KeyValueStore;
   queue?: JobQueue;
   sms?: SmsSender;
+  email?: EmailSender;
   telegramClient?: TelegramClient;
 }
 
@@ -120,7 +124,11 @@ export function buildContainer(overrides: Overrides = {}) {
     ? new TwilioSmsSender({ accountSid: env.TWILIO_ACCOUNT_SID!, authToken: env.TWILIO_AUTH_TOKEN!, from: env.TWILIO_FROM_NUMBER! })
     : new ConsoleSmsSender());
   const verificationService = new VerificationService(new VerificationRepository(db), users, sms);
-  const authService = new AuthService(users, new RefreshTokenRepository(db), sessions, userService, languageService, verificationService, audit);
+  const email = overrides.email ?? (env.SMTP_HOST
+    ? new SmtpEmailSender({ host: env.SMTP_HOST, port: env.SMTP_PORT, tls: env.SMTP_TLS, username: env.SMTP_USERNAME, password: env.SMTP_PASSWORD, from: env.SMTP_FROM! })
+    : new ConsoleEmailSender());
+  const emailVerificationService = new EmailVerificationService(new EmailVerificationRepository(db), users, email);
+  const authService = new AuthService(users, new RefreshTokenRepository(db), sessions, userService, languageService, verificationService, audit, emailVerificationService);
 
   const factory = overrides.providers
     ? overrides.providers.reduce((f, p) => f.register(p), new TranslationProviderFactory())
@@ -148,7 +156,7 @@ export function buildContainer(overrides: Overrides = {}) {
 
   return {
     store, rateLimiter, queue, factory,
-    audit, authService, verificationService, userService, languageService,
+    audit, authService, verificationService, emailVerificationService, userService, languageService,
     translationService, historyService, jobService, telegramService, linkService,
     maintenanceService: new MaintenanceService(new MaintenanceRepository(db), historyRepository, jobRepository),
   };

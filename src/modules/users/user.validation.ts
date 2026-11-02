@@ -28,6 +28,8 @@ export const languageCodeSchema = z
   .transform(normalizeLanguageCode)
   .refine((v) => LANGUAGE_CODE_PATTERN.test(v), "Invalid language code.");
 
+export const emailSchema = z.string().trim().toLowerCase().max(254).pipe(z.email("Enter a valid email address."));
+
 const name = z.string().trim().min(1).max(100);
 
 // `.strict()` rejects unknown keys, so `role` can never be supplied at registration.
@@ -37,10 +39,12 @@ export const registerSchema = z
     lastName: name,
     gender: z.string().trim().toLowerCase().min(1).max(32),
     nativeLanguage: languageCodeSchema,
-    mobile: mobileSchema,
+    mobile: mobileSchema.optional(),
+    email: emailSchema.optional(),
     password: passwordSchema,
   })
-  .strict();
+  .strict()
+  .refine((v) => Boolean(v.mobile) !== Boolean(v.email), { message: "Provide either an email address or a mobile number.", path: ["email"] });
 
 export const updateProfileSchema = z
   .object({ firstName: name.optional(), lastName: name.optional(), gender: z.string().trim().toLowerCase().max(32).optional(), nativeLanguage: languageCodeSchema.optional() })

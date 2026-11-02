@@ -5,7 +5,8 @@ export interface CreateUserData {
   lastName: string;
   gender: string;
   nativeLanguageCode: string;
-  mobile: string;
+  mobile?: string;
+  email?: string;
   passwordHash: string;
 }
 
@@ -26,6 +27,12 @@ export class UserRepository {
   }
   findByMobile(mobile: string) {
     return this.db.user.findUnique({ where: { mobile } });
+  }
+  findByEmail(email: string) {
+    return this.db.user.findUnique({ where: { email } });
+  }
+  markEmailVerified(email: string) {
+    return this.db.user.updateMany({ where: { email }, data: { isVerified: true, emailVerifiedAt: new Date() } });
   }
   update(id: string, data: Prisma.UserUpdateInput) {
     return this.db.user.update({ where: { id }, data });

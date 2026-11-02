@@ -17,6 +17,7 @@ export function toPublicUser(user: User) {
     gender: user.gender,
     nativeLanguage: user.nativeLanguageCode,
     mobile: user.mobile,
+    email: user.email,
     role: user.role,
     isActive: user.isActive,
     isVerified: user.isVerified,
